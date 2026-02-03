@@ -1990,6 +1990,129 @@ def delete_faculty_pdf(department, user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/<department>/<user_id>/saved-pdfs', methods=['GET'])
+def get_all_saved_pdfs(department, user_id):
+    """Retrieve all saved PDFs for a faculty member with their metadata"""
+    try:
+        collection = department_collections.get(department)
+        if collection is None:
+            return jsonify({"error": "Invalid department"}), 400
+
+        # Get user document
+        user_doc = collection.find_one({"_id": user_id})
+        if not user_doc:
+            return jsonify({"error": "Faculty not found"}), 404
+
+        # Get appraisal PDF if it exists
+        appraisal_pdf = user_doc.get('appraisal_pdf')
+        pdfs = []
+        
+        if appraisal_pdf and appraisal_pdf.get('file_id'):
+            pdfs.append({
+                "_id": appraisal_pdf['file_id'],
+                "filename": appraisal_pdf.get('filename', 'Appraisal Document'),
+                "faculty_name": appraisal_pdf.get('faculty_name'),
+                "appraisal_year": appraisal_pdf.get('appraisal_year'),
+                "upload_date": appraisal_pdf.get('upload_date'),
+                "status": appraisal_pdf.get('status'),
+                "designation": appraisal_pdf.get('faculty_designation')
+            })
+
+        return jsonify({
+            "pdfs": pdfs,
+            "count": len(pdfs)
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/<department>/<user_id>/view-saved-pdf/<pdf_id>', methods=['GET'])
+def view_saved_pdf(department, user_id, pdf_id):
+    """View a specific saved PDF by ID"""
+    try:
+        collection = department_collections.get(department)
+        if collection is None:
+            return jsonify({"error": "Invalid department"}), 400
+
+        # Get user document
+        user_doc = collection.find_one({"_id": user_id})
+        if not user_doc:
+            return jsonify({"error": "Faculty not found"}), 404
+
+        # Get appraisal PDF
+        appraisal_pdf = user_doc.get('appraisal_pdf')
+        if not appraisal_pdf or not appraisal_pdf.get('file_id'):
+            return jsonify({"error": "PDF not found"}), 404
+
+        # Verify the requested PDF ID matches
+        if appraisal_pdf['file_id'] != pdf_id:
+            return jsonify({"error": "PDF not found"}), 404
+
+        # Get file from GridFS
+        try:
+            file_id = ObjectId(pdf_id)
+            grid_out = fs.get(file_id)
+
+            # Return PDF
+            return send_file(
+                io.BytesIO(grid_out.read()),
+                as_attachment=False,
+                mimetype='application/pdf'
+            )
+        except Exception as e:
+            return jsonify({"error": "PDF file not found in storage"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/<department>/<user_id>/delete-saved-pdf/<pdf_id>', methods=['DELETE'])
+def delete_saved_pdf(department, user_id, pdf_id):
+    """Delete a specific saved PDF by ID"""
+    try:
+        collection = department_collections.get(department)
+        if collection is None:
+            return jsonify({"error": "Invalid department"}), 400
+
+        # Get user document
+        user_doc = collection.find_one({"_id": user_id})
+        if not user_doc:
+            return jsonify({"error": "Faculty not found"}), 404
+
+        # Get appraisal PDF
+        appraisal_pdf = user_doc.get('appraisal_pdf')
+        if not appraisal_pdf or not appraisal_pdf.get('file_id'):
+            return jsonify({"error": "PDF not found"}), 404
+
+        # Verify the requested PDF ID matches
+        if appraisal_pdf['file_id'] != pdf_id:
+            return jsonify({"error": "PDF not found"}), 404
+
+        # Delete file from GridFS
+        try:
+            file_id = ObjectId(pdf_id)
+            fs.delete(file_id)
+        except Exception as e:
+            # Log error but continue with document update
+            print(f"Warning: Could not delete file from GridFS: {str(e)}")
+
+        # Remove PDF reference from user document
+        collection.update_one(
+            {"_id": user_id},
+            {"$unset": {"appraisal_pdf": ""}}
+        )
+
+        return jsonify({
+            "message": "PDF deleted successfully",
+            "deleted": True
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 app.register_blueprint(verification_bp)
 # Add this line after creating the Flask app
 app.register_blueprint(faculty_list)
