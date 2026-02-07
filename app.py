@@ -479,8 +479,14 @@ def login():
         return jsonify({"error": "Missing required fields"}), 400
 
     user = db_signin.find_one({"_id": data["_id"]})
-    if user and bcrypt.checkpw(data["password"].encode('utf-8'), user["password"]):
-        user_data = db_users.find_one({"_id": data["_id"]})
+    if user:
+        # Handle both string and bytes passwords
+        stored_password = user["password"]
+        if isinstance(stored_password, str):
+            stored_password = stored_password.encode('utf-8')
+        
+        if bcrypt.checkpw(data["password"].encode('utf-8'), stored_password):
+            user_data = db_users.find_one({"_id": data["_id"]})
         if not user_data:
             return jsonify({"error": "User data not found"}), 404
 
@@ -514,12 +520,12 @@ def login():
                 "facultyToVerify": user_data.get("facultyToVerify", {})
             })
 
-        response = app.response_class(
-            response=dumps(response_data),
-            status=200,
-            mimetype='application/json'
-        )
-        return response
+            response = app.response_class(
+                response=dumps(response_data),
+                status=200,
+                mimetype='application/json'
+            )
+            return response
 
     return jsonify({"error": "Invalid credentials"}), 401
 
@@ -578,9 +584,13 @@ def handle_post_A(department, user_id):
         if collection is None:
             return jsonify({"error": "Invalid department"}), 400
         
-        lookup = collection.find_one({"_id": "lookup"}).get("data")
+        lookup_doc = collection.find_one({"_id": "lookup"})
+        if lookup_doc is None:
+            return jsonify({"error": "Lookup document not found"}), 400
+        
+        lookup = lookup_doc.get("data")
         if lookup is None:
-            return jsonify({"error": "Invalid department"}), 400
+            return jsonify({"error": "Invalid department data"}), 400
         user = lookup.get(user_id)
         if user is None:
             return jsonify({"error": "Invalid user"}), 400
@@ -674,10 +684,14 @@ def handle_post_B(department, user_id):
         if collection is None:
             return jsonify({"error": "Invalid department"}), 400
         
-        lookup = collection.find_one({"_id": "lookup"}).get("data")
+        lookup_doc = collection.find_one({"_id": "lookup"})
+        if lookup_doc is None:
+            return jsonify({"error": "Lookup document not found"}), 400
+        
+        lookup = lookup_doc.get("data")
         print(lookup)
         if lookup is None:
-            return jsonify({"error": "Invalid department"}), 400
+            return jsonify({"error": "Invalid department data"}), 400
         user = lookup.get(user_id)
         if user is None:
             return jsonify({"error": "Invalid user"}), 400
@@ -2471,9 +2485,13 @@ def handle_post_E(department, user_id):
             return jsonify({"error": "Invalid department"}), 400
         
         # Verify user exists in department
-        lookup = collection.find_one({"_id": "lookup"}).get("data")
+        lookup_doc = collection.find_one({"_id": "lookup"})
+        if lookup_doc is None:
+            return jsonify({"error": "Lookup document not found"}), 400
+        
+        lookup = lookup_doc.get("data")
         if lookup is None:
-            return jsonify({"error": "Invalid department"}), 400
+            return jsonify({"error": "Invalid department data"}), 400
         user = lookup.get(user_id)
         if user is None:
             return jsonify({"error": "Invalid user"}), 400
