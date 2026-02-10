@@ -759,14 +759,14 @@ def get_dean_external_mappings(department):
                 "dean": {
                     "id": dean_id,
                     "name": dean.get("name", "Unknown") if dean else "Unknown",
-                    "mail": dean.get("mail", ""),
+                    "mail": dean.get("mail", "") if dean else "",
                     "department": dean.get("dept", "Unknown") if dean else "Unknown"
                 },
                 "external": {
                     "id": external_id,
                     "name": external.get("full_name", "Unknown") if external else "Unknown",
-                    "mail": external.get("mail", ""),
-                    "organization": external.get("organization", "Unknown")
+                    "mail": external.get("mail", "") if external else "",
+                    "organization": external.get("organization", "Unknown") if external else "Unknown"
                 }
             })
 
